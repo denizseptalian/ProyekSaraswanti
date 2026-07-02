@@ -1,0 +1,7 @@
+streamlit>=1.35
+streamlit-webrtc>=0.47
+opencv-python-headless>=4.9
+numpy<2
+av>=11
+ai-edge-litert; python_version >= "3.12"
+tflite-runtime; python_version < "3.12"
