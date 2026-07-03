@@ -219,26 +219,26 @@ class ObjectTracker:
             self.total_counted = 0
             self.next_id = 0
 
-# ═══════════════════════════════════════════════════════════════
-# Draw (hanya bounding box + label – TANPA HUD di frame)
-# ═══════════════════════════════════════════════════════════════
+# ================================================================
+# Draw
+# ================================================================
 def _dashed_rect(img, x1, y1, x2, y2, color, dash=14, gap=7):
     step = dash + gap
     for x in range(x1, x2, step):
-        cv2.line(img, (x, y1),     (min(x+dash, x2), y1),     color, 2)
-        cv2.line(img, (x, y2),     (min(x+dash, x2), y2),     color, 2)
+        cv2.line(img, (x, y1),  (min(x+dash, x2), y1),  color, 2)
+        cv2.line(img, (x, y2),  (min(x+dash, x2), y2),  color, 2)
     for y in range(y1, y2, step):
-        cv2.line(img, (x1, y),     (x1, min(y+dash, y2)),     color, 2)
-        cv2.line(img, (x2, y),     (x2, min(y+dash, y2)),     color, 2)
+        cv2.line(img, (x1, y),  (x1, min(y+dash, y2)),  color, 2)
+        cv2.line(img, (x2, y),  (x2, min(y+dash, y2)),  color, 2)
 
 
 def draw_tracks(frame, tracks):
     for tid, t in tracks.items():
-        x1, y1, x2, y2 = t['box']
-        color   = CLASS_COLORS[t['cls'] % len(CLASS_COLORS)]
-        name    = CLASS_NAMES[t['cls']]
-        counted = t['counted']
-        label   = f"#{tid} {name} {t['conf']:.2f}" + (" ✓" if counted else "")
+        x1, y1, x2, y2 = t["box"]
+        color   = CLASS_COLORS[t["cls"] % len(CLASS_COLORS)]
+        name    = CLASS_NAMES[t["cls"]]
+        counted = t["counted"]
+        label   = f"#{tid} {name} {t['conf']:.2f}" + (" v" if counted else "")
 
         if counted:
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
@@ -254,14 +254,73 @@ def draw_tracks(frame, tracks):
 
 def draw_simple(frame, detections):
     for d in detections:
-        x1, y1, x2, y2 = d['box']
-        color = CLASS_COLORS[d['cls'] % len(CLASS_COLORS)]
+        x1, y1, x2, y2 = d["box"]
+        color = CLASS_COLORS[d["cls"] % len(CLASS_COLORS)]
         label = f"{CLASS_NAMES[d['cls']]}  {d['conf']:.2f}"
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
         (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
         cv2.rectangle(frame, (x1, y1-th-8), (x1+tw+6, y1), color, -1)
         cv2.putText(frame, label, (x1+3, y1-5),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    return frame
+
+
+def draw_hud(frame, counts, total):
+    """Panel semitransparent sudut kanan bawah: semua kelas selalu tampil.
+    Count bertambah hanya saat objek baru dikonfirmasi tracker."""
+    h, w   = frame.shape[:2]
+    FONT   = cv2.FONT_HERSHEY_SIMPLEX
+    pad    = 10
+    lh     = 28     # line height
+    dr     = 7      # dot radius
+    pw     = 230    # panel width
+    n_rows = len(CLASS_NAMES) + 2
+    ph     = pad * 2 + lh * n_rows + 6
+
+    x0, y0 = w - pw - 10, h - ph - 10
+
+    # Background semitransparent
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x0, y0), (x0+pw, y0+ph), (18, 18, 18), -1)
+    cv2.addWeighted(overlay, 0.72, frame, 0.28, 0, frame)
+    cv2.rectangle(frame, (x0, y0), (x0+pw, y0+ph), (70, 70, 70), 1)
+
+    # Judul
+    y = y0 + pad + 18
+    cv2.putText(frame, "RIPENESS COUNTER", (x0+pad, y),
+                FONT, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
+
+    # Setiap kelas
+    for i, name in enumerate(CLASS_NAMES):
+        y    += lh
+        cnt   = counts.get(i, 0)
+        color = CLASS_COLORS[i]
+        active = cnt > 0
+
+        cv2.circle(frame, (x0+pad+dr, y-5), dr,
+                   color if active else (55, 55, 55), -1)
+
+        txt_col = (230, 230, 230) if active else (110, 110, 110)
+        cv2.putText(frame, name, (x0+pad+dr*2+6, y),
+                    FONT, 0.50, txt_col, 1, cv2.LINE_AA)
+
+        cnt_str = str(cnt)
+        (cw, _), _ = cv2.getTextSize(cnt_str, FONT, 0.62, 2)
+        cnt_col = color if active else (70, 70, 70)
+        cv2.putText(frame, cnt_str, (x0+pw-pad-cw, y),
+                    FONT, 0.62, cnt_col, 2, cv2.LINE_AA)
+
+    # Divider + Total
+    y += 10
+    cv2.line(frame, (x0+pad, y), (x0+pw-pad, y), (80, 80, 80), 1)
+    y += lh - 2
+    cv2.putText(frame, "TOTAL", (x0+pad+dr*2+6, y),
+                FONT, 0.52, (0, 220, 220), 1, cv2.LINE_AA)
+    ts = str(total)
+    (tw, _), _ = cv2.getTextSize(ts, FONT, 0.72, 2)
+    cv2.putText(frame, ts, (x0+pw-pad-tw, y),
+                FONT, 0.72, (0, 220, 220), 2, cv2.LINE_AA)
+
     return frame
 
 # ═══════════════════════════════════════════════════════════════
@@ -357,7 +416,7 @@ with tab_cam:
                 self.last_dets = detect(img, conf_thres, iou_thres)
             active = tracker.update(self.last_dets)
             img    = draw_tracks(img, active)
-            # TIDAK draw_hud di sini – counter ditampilkan di page
+            img    = draw_hud(img, counts, total)
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     with col_vid:
@@ -431,7 +490,9 @@ with tab_video:
                 break
             dets   = detect(frame, conf_thres, iou_thres)
             active = vid_tracker.update(dets)
-            frame  = draw_tracks(frame, active)   # bounding box saja di frame
+            c_now, tot_now = vid_tracker.snapshot()
+            frame  = draw_tracks(frame, active)
+            frame  = draw_hud(frame, c_now, tot_now)
             writer.write(frame)
             i += 1
             if i % 4 == 0:
@@ -472,7 +533,12 @@ with tab_img:
         dets = detect(frame, conf_thres, iou_thres)
         ms   = (time.time() - t0) * 1000
 
+        # Untuk gambar statis: hitung kelas dari deteksi saja (tidak ada tracker)
+        img_counts = {}
+        for d in dets:
+            img_counts[d["cls"]] = img_counts.get(d["cls"], 0) + 1
         frame = draw_simple(frame, dets)
+        frame = draw_hud(frame, img_counts, len(dets))
 
         col_i, col_r = st.columns([3, 1], gap="medium")
         col_i.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB),
